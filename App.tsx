@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PokemonData, Region, Language, ItemData } from './types';
 import { Loader2, RefreshCw } from 'lucide-react';
+import { AuthProvider } from './contexts/AuthContext';
 
 // Components
 import { HomePage } from './components/HomePage';
@@ -273,85 +274,87 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] dark:bg-slate-950 transition-colors duration-300">
-        
-        {/* Home Page */}
-        {appMode === 'home' && (
-            <HomePage 
-                onNavigate={setAppMode}
-                isDark={isDarkMode}
-                toggleTheme={toggleTheme}
-                language={language}
-                setLanguage={setLanguage}
-            />
-        )}
+    <AuthProvider>
+        <div className="min-h-screen bg-[#f3f4f6] dark:bg-slate-950 transition-colors duration-300">
+            
+            {/* Home Page */}
+            {appMode === 'home' && (
+                <HomePage 
+                    onNavigate={setAppMode}
+                    isDark={isDarkMode}
+                    toggleTheme={toggleTheme}
+                    language={language}
+                    setLanguage={setLanguage}
+                />
+            )}
 
-        {/* Character Sheet Placeholder */}
-        {appMode === 'character' && (
-            <ComingSoon 
-                onBack={() => setAppMode('home')}
-                language={language}
-            />
-        )}
+            {/* Character Sheet Placeholder */}
+            {appMode === 'character' && (
+                <ComingSoon 
+                    onBack={() => setAppMode('home')}
+                    language={language}
+                />
+            )}
 
-        {/* Item List */}
-        {appMode === 'items' && (
-            <ItemList 
-                items={itemsDB}
-                onBack={() => setAppMode('home')}
-                language={language}
-            />
-        )}
+            {/* Item List */}
+            {appMode === 'items' && (
+                <ItemList 
+                    items={itemsDB}
+                    onBack={() => setAppMode('home')}
+                    language={language}
+                />
+            )}
 
-        {/* Pokemon Party Sheet */}
-        {appMode === 'pokemon' && (
-            <PokemonSheet 
-                onBack={() => setAppMode('home')}
-                allPokemon={pokemonDB}
-                language={language}
-                natureMap={natureFileMap}
-                moveFileMap={moveFileMap}
-                abilityFileMap={abilityFileMap}
-            />
-        )}
+            {/* Pokemon Party Sheet */}
+            {appMode === 'pokemon' && (
+                <PokemonSheet 
+                    onBack={() => setAppMode('home')}
+                    allPokemon={pokemonDB}
+                    language={language}
+                    natureMap={natureFileMap}
+                    moveFileMap={moveFileMap}
+                    abilityFileMap={abilityFileMap}
+                />
+            )}
 
-        {/* Pokedex Application */}
-        {appMode === 'pokedex' && (
-            <>
-                {pokedexView === 'regions' && (
-                    <RegionSelect 
-                        onSelect={handleRegionSelect} 
-                        onHome={() => setAppMode('home')}
-                        isDark={isDarkMode} 
-                        toggleTheme={toggleTheme}
-                        language={language}
-                        setLanguage={setLanguage}
-                    />
-                )}
+            {/* Pokedex Application */}
+            {appMode === 'pokedex' && (
+                <>
+                    {pokedexView === 'regions' && (
+                        <RegionSelect 
+                            onSelect={handleRegionSelect} 
+                            onHome={() => setAppMode('home')}
+                            isDark={isDarkMode} 
+                            toggleTheme={toggleTheme}
+                            language={language}
+                            setLanguage={setLanguage}
+                        />
+                    )}
 
-                {(pokedexView === 'list' || pokedexView === 'detail') && (
-                    <div className={pokedexView === 'detail' ? 'hidden' : 'block'}>
-                        <PokemonList 
-                            region={selectedRegion} 
-                            onBack={goBackToRegions} 
-                            onSelectPokemon={handlePokemonSelect} 
-                            data={pokemonDB}
+                    {(pokedexView === 'list' || pokedexView === 'detail') && (
+                        <div className={pokedexView === 'detail' ? 'hidden' : 'block'}>
+                            <PokemonList 
+                                region={selectedRegion} 
+                                onBack={goBackToRegions} 
+                                onSelectPokemon={handlePokemonSelect} 
+                                data={pokemonDB}
+                                language={language}
+                            />
+                        </div>
+                    )}
+
+                    {pokedexView === 'detail' && selectedPokemon && (
+                        <PokemonDetail 
+                            pokemon={selectedPokemon} 
+                            onBack={goBackToList}
+                            moveMap={moveFileMap}
+                            abilityMap={abilityFileMap}
                             language={language}
                         />
-                    </div>
-                )}
-
-                {pokedexView === 'detail' && selectedPokemon && (
-                    <PokemonDetail 
-                        pokemon={selectedPokemon} 
-                        onBack={goBackToList}
-                        moveMap={moveFileMap}
-                        abilityMap={abilityFileMap}
-                        language={language}
-                    />
-                )}
-            </>
-        )}
-    </div>
+                    )}
+                </>
+            )}
+        </div>
+    </AuthProvider>
   );
 }

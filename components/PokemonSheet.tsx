@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PokemonData, Language, PokemonCharacter } from '../types';
-import { ArrowLeft, Plus, Trash2, Search, X, Edit2, Monitor, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Search, X, Edit2, Monitor, ChevronLeft, ChevronRight, Cloud, CloudOff, Loader2, Save } from 'lucide-react';
 import { TRANSLATIONS, getTypeColor, getListImageUrl, getDetailImageUrl } from '../utils';
 import { PokeballIcon } from './Icons';
 import { TypeBadge } from './Shared';
 import { PokemonCharacterSheet } from './PokemonCharacterSheet';
+import { useAuth } from '../contexts/AuthContext';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export const PokemonSheet = ({
     onBack,
@@ -22,6 +25,7 @@ export const PokemonSheet = ({
     abilityFileMap: Record<string, string>;
 }) => {
     const t = TRANSLATIONS[language];
+    const { user } = useAuth();
     
     // Party State (Belt)
     const [party, setParty] = useState<(PokemonCharacter | null)[]>(Array(6).fill(null));
@@ -31,6 +35,11 @@ export const PokemonSheet = ({
         Array(20).fill(null).map(() => Array(30).fill(null))
     );
     const [currentBoxIndex, setCurrentBoxIndex] = useState(0);
+
+    // Sync State
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const hasLoadedRef = useRef(false); // To prevent saving empty state on init
 
     // Selection State
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -51,44 +60,93 @@ export const PokemonSheet = ({
     const [searchInput, setSearchInput] = useState(''); 
     const [activeSearch, setActiveSearch] = useState('');
 
+    // --- Data Persistence Logic ---
+
     // Load Data
     useEffect(() => {
-        // Load Party
-        const savedParty = localStorage.getItem('pokerole-party');
-        if (savedParty) {
-            try {
-                const parsed = JSON.parse(savedParty);
-                if (Array.isArray(parsed) && parsed.length === 6) {
-                    setParty(parsed);
+        const loadData = async () => {
+            setIsSyncing(true);
+            
+            if (user) {
+                // Cloud Load
+                try {
+                    const docRef = doc(db, "users", user.uid);
+                    const docSnap = await getDoc(docRef);
+                    
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.party) setParty(data.party);
+                        if (data.pcBoxes) setPcBoxes(data.pcBoxes);
+                    } else {
+                        // First time cloud user: Try to sync local data to cloud?
+                        // For now, we just start fresh or use local if exists in state default
+                        // Optionally verify if localStorage has data and prompt to merge
+                        const savedParty = localStorage.getItem('pokerole-party');
+                        const savedPC = localStorage.getItem('pokerole-pc');
+                        if (savedParty) setParty(JSON.parse(savedParty));
+                        if (savedPC) setPcBoxes(JSON.parse(savedPC));
+                    }
+                } catch (e) {
+                    console.error("Error loading from cloud", e);
                 }
-            } catch (e) {
-                console.error("Failed to load party", e);
-            }
-        }
-
-        // Load PC
-        const savedPC = localStorage.getItem('pokerole-pc');
-        if (savedPC) {
-             try {
-                const parsed = JSON.parse(savedPC);
-                // Validate structure roughly
-                if (Array.isArray(parsed) && parsed.length === 20 && Array.isArray(parsed[0]) && parsed[0].length === 30) {
-                    setPcBoxes(parsed);
+            } else {
+                // Local Load
+                const savedParty = localStorage.getItem('pokerole-party');
+                if (savedParty) {
+                    try {
+                        const parsed = JSON.parse(savedParty);
+                        if (Array.isArray(parsed) && parsed.length === 6) setParty(parsed);
+                    } catch (e) { console.error("Failed to load party", e); }
                 }
-            } catch (e) {
-                console.error("Failed to load PC", e);
+
+                const savedPC = localStorage.getItem('pokerole-pc');
+                if (savedPC) {
+                    try {
+                        const parsed = JSON.parse(savedPC);
+                        if (Array.isArray(parsed) && parsed.length === 20) setPcBoxes(parsed);
+                    } catch (e) { console.error("Failed to load PC", e); }
+                }
             }
-        }
-    }, []);
+            
+            hasLoadedRef.current = true;
+            setIsSyncing(false);
+        };
 
-    // Save Data
-    useEffect(() => {
-        localStorage.setItem('pokerole-party', JSON.stringify(party));
-    }, [party]);
+        loadData();
+    }, [user]);
 
+    // Save Data (Debounced)
     useEffect(() => {
-        localStorage.setItem('pokerole-pc', JSON.stringify(pcBoxes));
-    }, [pcBoxes]);
+        if (!hasLoadedRef.current) return;
+
+        const saveData = async () => {
+            if (user) {
+                // Cloud Save
+                setIsSyncing(true);
+                try {
+                    await setDoc(doc(db, "users", user.uid), {
+                        party,
+                        pcBoxes,
+                        lastUpdated: new Date()
+                    }, { merge: true });
+                    setLastSaved(new Date());
+                } catch (e) {
+                    console.error("Error saving to cloud", e);
+                } finally {
+                    setIsSyncing(false);
+                }
+            } else {
+                // Local Save
+                localStorage.setItem('pokerole-party', JSON.stringify(party));
+                localStorage.setItem('pokerole-pc', JSON.stringify(pcBoxes));
+                setLastSaved(new Date());
+            }
+        };
+
+        const timeoutId = setTimeout(saveData, 2000); // Debounce 2s
+        return () => clearTimeout(timeoutId);
+
+    }, [party, pcBoxes, user]);
 
 
     // --- Handlers ---
@@ -333,14 +391,35 @@ export const PokemonSheet = ({
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen pb-32">
-            <header className="mb-8 flex items-center gap-4">
-                <button 
-                    onClick={onBack} 
-                    className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-                >
-                    <ArrowLeft className="w-8 h-8 text-slate-700 dark:text-slate-200" />
-                </button>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-white">{t.party}</h1>
+            <header className="mb-8 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={onBack} 
+                        className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    >
+                        <ArrowLeft className="w-8 h-8 text-slate-700 dark:text-slate-200" />
+                    </button>
+                    <h1 className="text-3xl font-bold text-slate-800 dark:text-white">{t.party}</h1>
+                </div>
+                
+                {/* Sync Status Indicator */}
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
+                    {isSyncing ? (
+                         <Loader2 className="animate-spin text-blue-500" size={16} />
+                    ) : user ? (
+                         <Cloud className="text-green-500" size={16} />
+                    ) : (
+                         <CloudOff className="text-slate-400" size={16} />
+                    )}
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 hidden sm:inline">
+                        {isSyncing ? "Syncing..." : user ? "Cloud Saved" : "Local Save"}
+                    </span>
+                    {lastSaved && !isSyncing && (
+                         <span className="text-[10px] text-slate-300 ml-1">
+                             {lastSaved.toLocaleTimeString()}
+                         </span>
+                    )}
+                </div>
             </header>
 
             {/* Party Grid (Belt) */}

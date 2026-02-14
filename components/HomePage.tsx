@@ -1,9 +1,10 @@
 import React from 'react';
 import { Language } from '../types';
 import { Gen1PokedexIcon } from './Icons';
-import { User, FileText, Sun, Moon, Briefcase } from 'lucide-react';
+import { User, FileText, Sun, Moon, Briefcase, LogIn, LogOut, X, AlertTriangle } from 'lucide-react';
 import { TRANSLATIONS } from '../utils';
 import { LanguageSelector } from './LanguageSelector';
+import { useAuth } from '../contexts/AuthContext';
 
 export const HomePage = ({
     onNavigate,
@@ -19,9 +20,26 @@ export const HomePage = ({
     setLanguage: (l: Language) => void;
 }) => {
     const t = TRANSLATIONS[language];
+    const { user, signInWithGoogle, logout, error, clearError } = useAuth();
 
     return (
         <div className="p-6 max-w-6xl mx-auto min-h-screen flex flex-col animate-fade-in">
+             
+             {/* Error Banner */}
+             {error && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-lg px-4">
+                    <div className="bg-red-500 text-white p-4 rounded-xl shadow-2xl flex items-start gap-3 animate-bounce-in border-2 border-red-600">
+                        <AlertTriangle className="shrink-0 mt-0.5" size={20} />
+                        <div className="flex-1 text-sm font-bold whitespace-pre-line leading-relaxed">
+                            {error}
+                        </div>
+                        <button onClick={clearError} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                </div>
+             )}
+
              <header className="mb-12 mt-4 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="text-center md:text-left">
                     <h1 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center justify-center md:justify-start gap-3">
@@ -30,7 +48,7 @@ export const HomePage = ({
                     </h1>
                     <p className="text-slate-500 dark:text-slate-400 mt-2 text-lg">{t.appSubtitle}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-3">
                     <LanguageSelector currentLanguage={language} onChange={setLanguage} />
                     <button 
                         onClick={toggleTheme}
@@ -39,6 +57,37 @@ export const HomePage = ({
                     >
                         {isDark ? <Sun size={24} /> : <Moon size={24} />}
                     </button>
+                    
+                    {/* Login/User Button */}
+                    {user ? (
+                        <div className="flex items-center gap-2 pl-2 bg-white dark:bg-slate-800 rounded-full pr-1 py-1 shadow-md border border-slate-200 dark:border-slate-700">
+                             {user.photoURL ? (
+                                 <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-full border-2 border-green-500" />
+                             ) : (
+                                 <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-lg">
+                                     {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
+                                 </div>
+                             )}
+                             <span className="text-sm font-bold text-slate-700 dark:text-slate-200 hidden sm:block px-2">
+                                {user.displayName}
+                             </span>
+                             <button 
+                                onClick={() => logout()}
+                                className="w-10 h-10 flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                                title="Logout"
+                             >
+                                 <LogOut size={18} />
+                             </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => signInWithGoogle()}
+                            className="flex items-center gap-2 px-5 py-3 rounded-full bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-bold shadow-md hover:scale-105 transition-transform"
+                        >
+                            <LogIn size={20} />
+                            <span>Login</span>
+                        </button>
+                    )}
                 </div>
             </header>
 
