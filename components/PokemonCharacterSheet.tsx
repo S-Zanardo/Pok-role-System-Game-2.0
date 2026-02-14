@@ -134,16 +134,24 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
         
         const currentMoves = data.moves || [];
         const isSelected = currentMoves.includes(moveName);
+        const maxMoves = data.attributes.insight.current + 2;
         
         if (isSelected) {
             // Deselect
             setData(prev => ({ ...prev, moves: prev.moves.filter(m => m !== moveName) }));
         } else {
             // Select - Check Constraints
+            
+            // 1. Check Max Moves (Insight + 2)
+            if (currentMoves.length >= maxMoves) {
+                alert(`You can only learn ${maxMoves} moves (Insight + 2)!`);
+                return;
+            }
+
             const currentRankIndex = ALL_RANKS.indexOf(data.rank);
             const moveRankIndex = ALL_RANKS.indexOf(moveRank);
             
-            // If selecting a move from Next Rank, check if we already have one
+            // 2. If selecting a move from Next Rank, check if we already have one
             if (moveRankIndex > currentRankIndex) {
                 // Find existing next rank moves
                 const existingNextRankMoves = currentMoves.filter(m => {
@@ -641,6 +649,7 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
     const evasion = data.attributes.dexterity.current + data.skills.fight.evasion;
     const clash = data.attributes.strength.current + data.skills.fight.clash;
     const combat = data.combat || { accuracy: 0, damage: 0 };
+    const maxMoves = data.attributes.insight.current + 2;
 
     // Derived Moves for Edit Mode
     const availableMoves = useMemo(() => {
@@ -660,6 +669,11 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
 
         return { currentRank, nextRank };
     }, [baseData, data.rank]);
+
+    // Available Natures
+    const natureOptions = useMemo(() => {
+        return natureMap ? Object.keys(natureMap).sort() : [];
+    }, [natureMap]);
 
 
     return (
@@ -715,22 +729,29 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
 
                              {/* Counters Grid */}
                              <div className="ml-0 md:ml-4 bg-black/20 rounded-lg p-2 border border-white/10">
-                                <div className="grid grid-cols-7 gap-y-1 gap-x-2 items-center text-white">
-                                    {/* Headers */}
-                                    <div className="col-span-3 text-center text-[10px] font-bold text-yellow-400 uppercase">Win</div>
-                                    <div className="text-center text-white/20">/</div>
-                                    <div className="col-span-3 text-center text-[10px] font-bold text-white/60 uppercase">Fight</div>
+                                <div className="flex items-center gap-4 px-2 py-1">
+                                    {/* Win Column */}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Win</span>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => updateBattleStats('victories', -1)} className="p-1 hover:text-yellow-400 text-white/40 transition-colors"><Minus size={14}/></button>
+                                            <span className="font-mono font-bold text-xl text-white min-w-[24px] text-center">{data.victories || 0}</span>
+                                            <button onClick={() => updateBattleStats('victories', 1)} className="p-1 hover:text-yellow-400 text-white/40 transition-colors"><Plus size={14}/></button>
+                                        </div>
+                                    </div>
 
-                                    {/* Row 2: - Val + / - Val + */}
-                                    <button onClick={() => updateBattleStats('victories', -1)} className="p-1 hover:text-yellow-400 text-white/40 transition-colors"><Minus size={12}/></button>
-                                    <span className="font-mono font-bold text-center text-lg">{data.victories || 0}</span>
-                                    <button onClick={() => updateBattleStats('victories', 1)} className="p-1 hover:text-yellow-400 text-white/40 transition-colors"><Plus size={12}/></button>
-                                    
-                                    <span className="text-white/20 font-light text-xl">/</span>
+                                    {/* Divider */}
+                                    <div className="w-px h-8 bg-white/20"></div>
 
-                                    <button onClick={() => updateBattleStats('battles', -1)} className="p-1 hover:text-white text-white/40 transition-colors"><Minus size={12}/></button>
-                                    <span className="font-mono font-bold text-center text-lg">{data.battles || 0}</span>
-                                    <button onClick={() => updateBattleStats('battles', 1)} className="p-1 hover:text-white text-white/40 transition-colors"><Plus size={12}/></button>
+                                    {/* Fight Column */}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Fight</span>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => updateBattleStats('battles', -1)} className="p-1 hover:text-white text-white/40 transition-colors"><Minus size={14}/></button>
+                                            <span className="font-mono font-bold text-xl text-white min-w-[24px] text-center">{data.battles || 0}</span>
+                                            <button onClick={() => updateBattleStats('battles', 1)} className="p-1 hover:text-white text-white/40 transition-colors"><Plus size={14}/></button>
+                                        </div>
+                                    </div>
                                 </div>
                              </div>
                         </div>
@@ -866,39 +887,52 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
 
                         {/* Moves Section */}
                         <div className="bg-slate-800 rounded-3xl border-4 border-slate-700 p-4 flex-1">
-                            <h3 className="text-white font-bold uppercase mb-4 flex items-center gap-2">
-                                <Zap className="text-yellow-400" /> {t.moveset}
-                            </h3>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-white font-bold uppercase flex items-center gap-2">
+                                    <Zap className="text-yellow-400" /> {t.moveset}
+                                </h3>
+                                <span className="text-xs font-mono text-slate-400">
+                                    {data.moves.length}/{maxMoves}
+                                </span>
+                            </div>
                             
                             <div className="space-y-2">
-                                {data.moves && data.moves.length > 0 ? data.moves.map((moveName, i) => (
-                                    <button 
-                                        key={i}
-                                        onClick={() => {
-                                            if (isLocked) {
-                                                // If in Game Mode, open detail popup to roll
-                                                if(moveFileMap) {
-                                                    const path = moveFileMap[moveName] || Object.entries(moveFileMap).find(([k]) => k.toLowerCase() === moveName.toLowerCase())?.[1];
-                                                    if(path) setViewMove({ name: moveName, path });
-                                                }
-                                            } else {
-                                                 toggleMove(moveName, ''); // Remove in Edit Mode (Logic simplified)
-                                            }
-                                        }}
-                                        className="w-full bg-white rounded-xl p-3 flex justify-between items-center shadow-md hover:scale-[1.01] active:scale-95 transition-all text-left group"
-                                    >
-                                        <span className="font-bold text-slate-800">{getLocalizedMoveName(moveName, language)}</span>
-                                        {isLocked ? (
-                                            <Dices className="text-slate-300 group-hover:text-blue-500 transition-colors" size={20} />
-                                        ) : (
-                                            <Minus className="text-red-500" size={20} />
-                                        )}
-                                    </button>
-                                )) : (
-                                    <div className="text-white/50 text-center py-8 italic border-2 border-dashed border-white/20 rounded-xl">
-                                        No moves learned.
-                                    </div>
-                                )}
+                                {Array.from({ length: maxMoves }).map((_, i) => {
+                                    const moveName = data.moves[i];
+                                    
+                                    if (moveName) {
+                                        return (
+                                            <button 
+                                                key={i}
+                                                onClick={() => {
+                                                    if (isLocked) {
+                                                        // If in Game Mode, open detail popup to roll
+                                                        if(moveFileMap) {
+                                                            const path = moveFileMap[moveName] || Object.entries(moveFileMap).find(([k]) => k.toLowerCase() === moveName.toLowerCase())?.[1];
+                                                            if(path) setViewMove({ name: moveName, path });
+                                                        }
+                                                    } else {
+                                                         toggleMove(moveName, ''); // Remove in Edit Mode (Logic simplified)
+                                                    }
+                                                }}
+                                                className="w-full bg-white rounded-xl p-3 flex justify-between items-center shadow-md hover:scale-[1.01] active:scale-95 transition-all text-left group"
+                                            >
+                                                <span className="font-bold text-slate-800">{getLocalizedMoveName(moveName, language)}</span>
+                                                {isLocked ? (
+                                                    <Dices className="text-slate-300 group-hover:text-blue-500 transition-colors" size={20} />
+                                                ) : (
+                                                    <Minus className="text-red-500" size={20} />
+                                                )}
+                                            </button>
+                                        );
+                                    } else {
+                                        return (
+                                             <div key={i} className="w-full bg-slate-700/50 rounded-xl p-3 flex justify-center items-center border-2 border-dashed border-slate-600">
+                                                <span className="text-slate-500 font-bold text-xs uppercase tracking-widest">Empty Slot</span>
+                                            </div>
+                                        );
+                                    }
+                                })}
                             </div>
 
                             {/* Edit Mode: Add Move */}
@@ -932,9 +966,37 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {/* Items / Status */}
                             <div className="bg-slate-100 rounded-3xl p-4 border-4 border-slate-300">
-                                 <BoxInput label={t.sheet.nature} value={data.nature} onChange={(v) => updateInfo('nature', v)} />
+                                 {/* Nature Select */}
+                                 <div className={`bg-white rounded-xl border-4 border-slate-700 overflow-hidden flex flex-col mb-3 shadow-sm ${isLocked ? 'bg-slate-100' : ''}`}>
+                                    <div className="bg-slate-700 px-2 py-0.5">
+                                        <span className="text-[10px] font-bold text-white uppercase tracking-widest">{t.sheet.nature}</span>
+                                    </div>
+                                    {isLocked ? (
+                                         <div className="w-full px-2 py-1 text-slate-800 font-bold bg-slate-100 cursor-default min-h-[32px] flex items-center">
+                                            {data.nature || "-"}
+                                         </div>
+                                    ) : (
+                                        <select
+                                            value={data.nature}
+                                            onChange={(e) => updateInfo('nature', e.target.value)}
+                                            className="w-full px-2 py-1 text-slate-800 font-bold outline-none appearance-none bg-blue-50 focus:bg-white"
+                                        >
+                                            <option value="">- Select -</option>
+                                            {natureOptions.map(n => (
+                                                <option key={n} value={n}>{n}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                 {/* Confidence (Derived) */}
+                                 <BoxInput 
+                                    label={t.sheet.confidence} 
+                                    value={data.confidence} 
+                                    onChange={(v) => updateInfo('confidence', v)} 
+                                 />
+
                                  <BoxInput label={t.sheet.item} value={data.item} onChange={(v) => updateInfo('item', v)} />
-                                 <BoxInput label={t.sheet.accessory} value={data.accessory} onChange={(v) => updateInfo('accessory', v)} />
                                  
                                  {/* Status Select */}
                                  <div className="bg-white rounded-xl border-4 border-slate-700 overflow-hidden flex flex-col mb-3 shadow-sm">
