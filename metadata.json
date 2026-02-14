@@ -1,0 +1,5 @@
+{
+  "name": "Pokérole Dex",
+  "description": "A specialized Pokedex for the Pokérole Tabletop RPG featuring region selection, stat tracking, and beautiful type-based cards.",
+  "requestFramePermissions": []
+}
