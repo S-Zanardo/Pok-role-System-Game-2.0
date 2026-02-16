@@ -1,5 +1,5 @@
 import React from 'react';
-import { PokemonData, Language, ItemData } from './types';
+import { PokemonData, Language, ItemData, PokemonCharacter } from './types';
 
 // --- Constants ---
 export const ALL_TYPES = [
@@ -824,4 +824,45 @@ export const getStatDots = (current: number, max: number) => {
     );
   }
   return <div className="flex items-center">{dots}</div>;
+};
+
+export const createInitialPokemon = (data: PokemonData): PokemonCharacter => {
+    return {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        dexId: data.Number,
+        nickname: data.Name,
+        speciesName: data.Name,
+        type1: data.Type1,
+        type2: data.Type2,
+        rank: data.RecommendedRank,
+        attributes: {
+            strength: { current: data.Strength, max: data.MaxStrength },
+            dexterity: { current: data.Dexterity, max: data.MaxDexterity },
+            vitality: { current: data.Vitality, max: data.MaxVitality },
+            special: { current: data.Special, max: data.MaxSpecial },
+            insight: { current: data.Insight, max: data.MaxInsight },
+        },
+        skills: {
+            fight: { brawl: 0, channel: 0, clash: 0, evasion: 0 },
+            survival: { alert: 0, athletic: 0, nature: 0, stealth: 0 },
+            social: { allure: 0, etiquette: 0, intimidate: 0, perform: 0 },
+        },
+        hp: { current: data.BaseHP, max: data.BaseHP },
+        will: { current: data.Insight, max: data.Insight },
+        moves: [], 
+        nature: "Hardy",
+        confidence: "Average",
+        happiness: 2,
+        loyalty: 1,
+        battles: 0,
+        victories: 0,
+        item: "",
+        status: "Neutral",
+        accessory: "",
+        contest: { tough: 0, cool: 0, beauty: 0, cute: 0, clever: 0 },
+        combat: { accuracy: 0, damage: 0 },
+        size: `${data.Height.Meters}m`,
+        weight: `${data.Weight.Kilograms}kg`,
+        image: data.Image
+    };
 };

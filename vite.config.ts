@@ -9,5 +9,10 @@ export default defineConfig(({ mode }) => ({
   base: mode === 'production' ? '/Pok-role-System-Game-2.0/' : '/',
   build: {
     outDir: 'dist',
-  }
+  },
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
+  },
 }));

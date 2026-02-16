@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PokemonData, Region, Language, ItemData } from './types';
+import { PokemonData, Region, Language, ItemData, PokemonCharacter } from './types';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { saveUserData, loadUserData } from './services/persistence';
 
 // Components
 import { HomePage } from './components/HomePage';
@@ -21,6 +22,15 @@ const RAW_BASE_URL = 'https://raw.githubusercontent.com/Pokerole-Software-Develo
 // --- Main App Container ---
 
 export default function App() {
+  return (
+    <AuthProvider>
+        <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user } = useAuth();
   // Navigation State
   const [appMode, setAppMode] = useState<'home' | 'pokedex' | 'character' | 'pokemon' | 'items'>('home');
   const [pokedexView, setPokedexView] = useState<'regions' | 'list' | 'detail'>('regions');
@@ -32,6 +42,13 @@ export default function App() {
   // Data State
   const [pokemonDB, setPokemonDB] = useState<PokemonData[]>([]);
   const [itemsDB, setItemsDB] = useState<ItemData[]>([]);
+
+  // User Data State (Persistence)
+  const [party, setParty] = useState<(PokemonCharacter | null)[]>(Array(6).fill(null));
+  const [pc, setPc] = useState<(PokemonCharacter | null)[][]>(
+      Array(20).fill(null).map(() => Array(30).fill(null))
+  );
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   
   // Store maps for on-demand fetching
   const [moveFileMap, setMoveFileMap] = useState<Record<string, string>>({});
@@ -215,6 +232,61 @@ export default function App() {
     fetchData();
   }, []);
 
+  // --- Persistence Logic ---
+
+  // 1. Load data on login
+  useEffect(() => {
+    if (user) {
+        loadUserData(user.uid).then((data) => {
+            // Definisci la struttura di default
+            const defaultParty = Array(6).fill(null);
+            const defaultPc = Array(20).fill(null).map(() => Array(30).fill(null));
+
+            // Usa i dati caricati SOLO se validi (lunghezza corretta), altrimenti usa default
+            const loadedParty = (data?.party && data.party.length === 6) ? data.party : defaultParty;
+            const loadedPc = (data?.pcBoxes && data.pcBoxes.length === 20) ? data.pcBoxes : defaultPc;
+            
+            setParty(loadedParty);
+            setPc(loadedPc);
+            setIsDataLoaded(true);
+        });
+    } else {
+        // Reset alla struttura di default (NON array vuoti) quando non loggato
+        setParty(Array(6).fill(null));
+        setPc(Array(20).fill(null).map(() => Array(30).fill(null)));
+        setIsDataLoaded(false);
+    }
+  }, [user]);
+
+  // 2. Manual Save/Load Handlers
+  const handleManualSave = async () => {
+      if (!user) return;
+      try {
+          await saveUserData(user.uid, { party, pcBoxes: pc });
+          alert("Salvataggio completato con successo!");
+      } catch (e) {
+          console.error("Errore salvataggio:", e);
+          alert("Errore durante il salvataggio. Controlla la console.");
+      }
+  };
+
+  const handleManualLoad = async () => {
+      if (!user) return;
+      const data = await loadUserData(user.uid);
+      if (data) {
+          // Logica robusta: se i dati sono corrotti o vuoti, usa i default
+          const defaultParty = Array(6).fill(null);
+          const defaultPc = Array(20).fill(null).map(() => Array(30).fill(null));
+
+          const loadedParty = (data.party && Array.isArray(data.party) && data.party.length === 6) ? data.party : defaultParty;
+          const loadedPc = (data.pcBoxes && Array.isArray(data.pcBoxes)) ? data.pcBoxes : defaultPc;
+
+          setParty(loadedParty);
+          setPc(loadedPc);
+          alert("Dati ricaricati dal cloud!");
+      }
+  };
+
   // --- Navigation Handlers ---
 
   const handleRegionSelect = (region: Region) => {
@@ -274,7 +346,6 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
         <div className="min-h-screen bg-[#f3f4f6] dark:bg-slate-950 transition-colors duration-300">
             
             {/* Home Page */}
@@ -314,6 +385,12 @@ export default function App() {
                     natureMap={natureFileMap}
                     moveFileMap={moveFileMap}
                     abilityFileMap={abilityFileMap}
+                    party={party}
+                    setParty={setParty}
+                    pcBoxes={pc}
+                    setPcBoxes={setPc}
+                    onSave={handleManualSave}
+                    onLoad={handleManualLoad}
                 />
             )}
 
@@ -355,6 +432,5 @@ export default function App() {
                 </>
             )}
         </div>
-    </AuthProvider>
   );
 }
