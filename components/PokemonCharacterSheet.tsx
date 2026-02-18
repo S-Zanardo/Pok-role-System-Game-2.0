@@ -71,6 +71,13 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
     // UI State for Stat Choice (when a move has "Strength/Dexterity")
     const [statChoice, setStatChoice] = useState<{ isOpen: boolean, options: string[], modifier: string, moveData?: MoveDetailData } | null>(null);
 
+    // UI State for Damage Reception
+    const [damageModal, setDamageModal] = useState<{ isOpen: boolean, damage: string, type: 'physical' | 'special' }>({
+        isOpen: false,
+        damage: '',
+        type: 'physical'
+    });
+
     // Nature Details State
     const [natureDetails, setNatureDetails] = useState<NatureData | null>(null);
     const [isNatureInfoOpen, setIsNatureInfoOpen] = useState(false);
@@ -363,6 +370,50 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
         });
     };
 
+    const openDamageModal = () => {
+        setDamageModal({ isOpen: true, damage: '', type: 'physical' });
+    };
+
+    const applyDamage = () => {
+        const dmg = parseInt(damageModal.damage) || 0;
+        const def = damageModal.type === 'physical' ? data.attributes.vitality.current : data.attributes.insight.current;
+        const taken = Math.max(0, dmg - def);
+        
+        const currentHp = data.hp.current;
+        const newHp = Math.max(0, currentHp - taken);
+        
+        updateVitals('hp', 'current', newHp);
+        setDamageModal(prev => ({ ...prev, isOpen: false }));
+    };
+
+    const executeEvasionRoll = () => {
+        setRollData({
+            step: 'setup',
+            mode: 'attribute',
+            isOpen: true,
+            statName: 'Evasion',
+            statValue: data.attributes.dexterity.current,
+            selectedSkillName: 'Evasion',
+            selectedSkillValue: data.skills.fight.evasion,
+            results: [],
+            successes: 0
+        });
+    };
+
+    const executeClashRoll = () => {
+        setRollData({
+            step: 'setup',
+            mode: 'attribute',
+            isOpen: true,
+            statName: 'Clash',
+            statValue: data.attributes.strength.current,
+            selectedSkillName: 'Clash',
+            selectedSkillValue: data.skills.fight.clash,
+            results: [],
+            successes: 0
+        });
+    };
+
     // Handle Dice Animation
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
@@ -442,7 +493,7 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
     };
 
     const updateInfo = (field: keyof PokemonCharacter, value: any) => {
-        if (isLocked) return;
+        if (isLocked && field !== 'status') return;
         setData(prev => ({ ...prev, [field]: value }));
     };
 
@@ -585,20 +636,45 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
         </div>
     );
 
-    const VitalBox = ({ label, current, max, onChangeCurrent, icon }: { label: string, current: number, max: number, onChangeCurrent: (v: number) => void, icon?: React.ReactNode }) => (
-         <div className="bg-slate-800 rounded-2xl p-1.5 flex items-center justify-between gap-3 mb-3 border-4 border-slate-700 shadow-md">
-            <div className="flex-1 pl-3 overflow-hidden flex items-center gap-2">
-                 <span className="text-lg font-black text-white uppercase tracking-wider truncate">{label}</span>
-                 {icon}
-            </div>
-            <div className="w-28 bg-white rounded-xl h-10 flex items-center px-2 relative overflow-hidden shrink-0">
-                 <input 
-                    type="number"
-                    value={current}
-                    onChange={(e) => onChangeCurrent(parseInt(e.target.value) || 0)}
-                    className="w-full text-2xl font-bold text-slate-800 bg-transparent relative z-10 outline-none"
-                 />
-                 <span className="text-slate-400 text-sm font-mono absolute right-2 top-1/2 transform -translate-y-1/2">/{max}</span>
+    const ResourceBar = ({ 
+        label, 
+        current, 
+        max, 
+        onChangeCurrent,
+        Icon,
+        activeColor
+    }: { 
+        label: string, 
+        current: number, 
+        max: number, 
+        onChangeCurrent: (v: number) => void,
+        Icon: React.ElementType,
+        activeColor: string
+    }) => (
+        <div className="bg-slate-800 rounded-2xl p-3 mb-3 border-4 border-slate-700 shadow-md flex items-center gap-4">
+            <span className="text-lg font-black text-white uppercase tracking-wider shrink-0">{label}</span>
+            <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: max }).map((_, i) => (
+                    <button
+                        key={i}
+                        disabled={!isLocked}
+                        onClick={() => {
+                            const newValue = i + 1;
+                            if (i === 0 && current === 1) {
+                                onChangeCurrent(0);
+                            } else {
+                                onChangeCurrent(newValue);
+                            }
+                        }}
+                        className={`transition-all duration-200 ${isLocked ? 'cursor-pointer hover:scale-110' : 'cursor-default opacity-80'}`}
+                        title={`${i + 1}/${max}`}
+                    >
+                        <Icon 
+                            size={24} 
+                            className={`drop-shadow-sm ${i < current ? activeColor : 'text-slate-600 fill-slate-900'}`} 
+                        />
+                    </button>
+                ))}
             </div>
         </div>
     );
@@ -608,13 +684,15 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
         value, 
         onChange, 
         isReadOnly = false,
-        onRoll 
+        onAction,
+        ActionIcon = Dices
     }: { 
         label: string, 
         value: number | string, 
         onChange?: (v: number) => void, 
         isReadOnly?: boolean,
-        onRoll?: () => void
+        onAction?: () => void,
+        ActionIcon?: React.ElementType
     }) => (
         <div className="flex rounded-full border-4 border-slate-700 bg-white overflow-hidden h-9 shadow-sm">
            <div className="flex-1 flex items-center pl-3 font-black text-slate-700 uppercase text-[10px] tracking-wider whitespace-nowrap overflow-hidden">
@@ -622,14 +700,14 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
            </div>
            {isReadOnly || isLocked ? (
                <div 
-                   onClick={() => isLocked && onRoll && onRoll()}
+                   onClick={() => isLocked && onAction && onAction()}
                    className={`w-20 flex items-center justify-center font-bold text-slate-800 text-lg border-l-2 border-slate-200 
                    ${isLocked ? 'bg-slate-100' : 'bg-blue-100'}
-                   ${isLocked && onRoll ? 'cursor-pointer hover:bg-green-100 hover:text-green-800 transition-colors' : ''}
+                   ${isLocked && onAction ? 'cursor-pointer hover:bg-green-100 hover:text-green-800 transition-colors' : ''}
                    `}
                >
                    {value}
-                   {isLocked && onRoll && <Dices size={12} className="ml-1 opacity-50" />}
+                   {isLocked && onAction && <ActionIcon size={12} className="ml-1 opacity-50" />}
                </div>
            ) : (
                <input 
@@ -837,19 +915,21 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                         
                         {/* Vitals */}
                         <div>
-                             <VitalBox 
+                             <ResourceBar 
                                 label={t.sheet.hp} 
                                 current={data.hp.current} 
                                 max={data.hp.max}
                                 onChangeCurrent={(v) => updateVitals('hp', 'current', v)}
-                                icon={<Heart className="text-red-500 fill-red-500" />}
+                                Icon={Heart}
+                                activeColor="text-red-500 fill-red-500"
                              />
-                             <VitalBox 
+                             <ResourceBar 
                                 label={t.sheet.will} 
                                 current={data.will.current} 
                                 max={data.will.max}
                                 onChangeCurrent={(v) => updateVitals('will', 'current', v)}
-                                icon={<Brain className="text-blue-500 fill-blue-500" />}
+                                Icon={Brain}
+                                activeColor="text-blue-500 fill-blue-500"
                              />
                         </div>
 
@@ -861,12 +941,15 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     label={t.sheet.initiative} 
                                     value={initiative} 
                                     isReadOnly={true}
-                                    onRoll={() => executeInitiativeRoll()}
+                                    onAction={() => executeInitiativeRoll()}
+                                    ActionIcon={Dices}
                                 />
                                 <QuickRefPill 
                                     label={t.sheet.def} 
                                     value={`${defense}/${spDefense}`}
                                     isReadOnly={true}
+                                    onAction={openDamageModal}
+                                    ActionIcon={Shield}
                                 />
                             </div>
 
@@ -876,11 +959,15 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     label={t.sheet.evasion} 
                                     value={evasion} 
                                     isReadOnly={true}
+                                    onAction={executeEvasionRoll}
+                                    ActionIcon={Dices}
                                 />
                                 <QuickRefPill 
                                     label={t.sheet.clash} 
                                     value={clash} 
                                     isReadOnly={true}
+                                    onAction={executeClashRoll}
+                                    ActionIcon={Dices}
                                 />
                             </div>
                          </div>
@@ -1005,9 +1092,8 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     </div>
                                     <select
                                         value={data.status}
-                                        disabled={isLocked}
                                         onChange={(e) => updateInfo('status', e.target.value)}
-                                        className={`w-full px-2 py-1 text-slate-800 font-bold outline-none appearance-none ${isLocked ? 'bg-slate-100' : 'bg-blue-50'}`}
+                                        className={`w-full px-2 py-1 text-slate-800 font-bold outline-none appearance-none ${isLocked ? 'bg-white cursor-pointer' : 'bg-blue-50'}`}
                                     >
                                         {STATUS_CONDITIONS.map(s => (
                                             <option key={s} value={s}>{
@@ -1059,14 +1145,14 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                 {/* Stat Choice Modal */}
                 {statChoice && (
                     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-white rounded-3xl p-6 max-w-sm w-full animate-scale-up text-center">
-                            <h3 className="text-xl font-bold text-slate-800 mb-4">Choose Attribute</h3>
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full animate-scale-up text-center">
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Choose Attribute</h3>
                             <div className="grid grid-cols-1 gap-3">
                                 {statChoice.options.map(opt => (
                                     <button
                                         key={opt}
                                         onClick={() => executeMoveRoll(opt, statChoice.modifier.replace('+', '').trim(), statChoice.moveData)}
-                                        className="w-full py-4 bg-slate-100 hover:bg-blue-500 hover:text-white rounded-xl font-bold text-lg transition-colors border-2 border-slate-200"
+                                        className="w-full py-4 bg-slate-100 dark:bg-slate-800 hover:bg-blue-500 dark:hover:bg-blue-600 hover:text-white rounded-xl font-bold text-lg transition-colors border-2 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                                     >
                                         {opt}
                                     </button>
@@ -1077,32 +1163,110 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                     </div>
                 )}
 
+                {/* Damage Reception Modal */}
+                {damageModal.isOpen && (
+                    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setDamageModal(prev => ({ ...prev, isOpen: false }))}>
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full animate-scale-up text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-6 uppercase tracking-tight">
+                                {t.sheet.damageReception}
+                            </h3>
+                            
+                            <div className="mb-6">
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">{t.sheet.damageInflicted}</label>
+                                <input 
+                                    type="number" 
+                                    autoFocus
+                                    value={damageModal.damage}
+                                    onChange={(e) => setDamageModal(prev => ({ ...prev, damage: e.target.value }))}
+                                    className="w-full text-center text-4xl font-black bg-slate-100 dark:bg-slate-800 rounded-xl py-4 text-slate-800 dark:text-white outline-none focus:ring-4 focus:ring-red-500 transition-all"
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                <button
+                                    onClick={() => setDamageModal(prev => ({ ...prev, type: 'physical' }))}
+                                    className={`py-3 rounded-xl font-bold text-sm transition-all border-2 ${
+                                        damageModal.type === 'physical'
+                                        ? 'bg-orange-500 border-orange-500 text-white shadow-lg scale-105'
+                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-orange-300'
+                                    }`}
+                                >
+                                    {t.sheet.physical}
+                                    <span className="block text-xs opacity-80 font-normal mt-1">Def: {data.attributes.vitality.current}</span>
+                                </button>
+                                <button
+                                    onClick={() => setDamageModal(prev => ({ ...prev, type: 'special' }))}
+                                    className={`py-3 rounded-xl font-bold text-sm transition-all border-2 ${
+                                        damageModal.type === 'special'
+                                        ? 'bg-purple-500 border-purple-500 text-white shadow-lg scale-105'
+                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-purple-300'
+                                    }`}
+                                >
+                                    {t.sheet.special}
+                                    <span className="block text-xs opacity-80 font-normal mt-1">S.Def: {data.attributes.insight.current}</span>
+                                </button>
+                            </div>
+
+                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-bold text-slate-400 uppercase">{t.sheet.damageTaken}</span>
+                                    <span className="text-2xl font-black text-red-500">
+                                        {Math.max(0, (parseInt(damageModal.damage) || 0) - (damageModal.type === 'physical' ? data.attributes.vitality.current : data.attributes.insight.current))}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-slate-400 uppercase">{t.sheet.newHp}</span>
+                                    <span className="text-lg font-bold text-slate-700 dark:text-slate-300">
+                                        {Math.max(0, data.hp.current - Math.max(0, (parseInt(damageModal.damage) || 0) - (damageModal.type === 'physical' ? data.attributes.vitality.current : data.attributes.insight.current)))} / {data.hp.max}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setDamageModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="flex-1 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    {t.cancel}
+                                </button>
+                                <button 
+                                    onClick={applyDamage}
+                                    className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-lg transition-colors"
+                                >
+                                    {t.apply}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Dice Roller Overlay */}
                 {rollData.isOpen && (
                     <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in p-4" onClick={() => {
                         if (rollData.step === 'result') setRollData(prev => ({ ...prev, isOpen: false }));
                     }}>
-                        <div className="bg-white rounded-[3rem] p-8 md:p-12 w-full max-w-2xl text-center shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-8 md:p-12 w-full max-w-2xl text-center shadow-2xl relative overflow-hidden" onClick={e => e.stopPropagation()}>
                             
                             {/* Close Button */}
                             <button 
                                 onClick={() => setRollData(prev => ({ ...prev, isOpen: false }))}
-                                className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full hover:bg-slate-200"
+                                className="absolute top-6 right-6 p-2 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white"
                             >
                                 <X size={24} />
                             </button>
 
                             {/* Header */}
                             <div className="mb-8">
-                                <h2 className="text-4xl font-black text-slate-800 uppercase tracking-tighter mb-2">
+                                <h2 className="text-4xl font-black text-slate-800 dark:text-white uppercase tracking-tighter mb-2">
                                     {rollData.statName} Check
                                 </h2>
-                                <div className="inline-flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-full font-bold text-slate-500">
-                                    <span className="text-blue-600">{rollData.statValue}</span>
+                                <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-full font-bold text-slate-500 dark:text-slate-400">
+                                    <span className="text-blue-600 dark:text-blue-400">{rollData.statValue}</span>
                                     {rollData.selectedSkillName && (
                                         <>
                                             <span>+</span>
-                                            <span className="text-purple-600">{rollData.selectedSkillName} ({rollData.selectedSkillValue})</span>
+                                            <span className="text-purple-600 dark:text-purple-400">{rollData.selectedSkillName} ({rollData.selectedSkillValue})</span>
                                         </>
                                     )}
                                 </div>
@@ -1125,7 +1289,7 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                                             className={`px-4 py-2 rounded-lg font-bold border-2 transition-all capitalize ${
                                                                 rollData.selectedSkillName === name 
                                                                 ? 'bg-purple-600 border-purple-600 text-white shadow-lg scale-105' 
-                                                                : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300'
+                                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-purple-300 dark:hover:border-purple-500'
                                                             }`}
                                                         >
                                                             {name} ({val as number})
@@ -1166,7 +1330,7 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                                 className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-black border-4 ${
                                                     val >= 4 
                                                     ? 'bg-green-500 border-green-600 text-white shadow-lg' 
-                                                    : 'bg-slate-200 border-slate-300 text-slate-400'
+                                                    : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500'
                                                 }`}
                                             >
                                                 {val}
@@ -1175,12 +1339,12 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     </div>
 
                                     {rollData.mode === 'initiative' ? (
-                                         <div className="bg-yellow-50 border-4 border-yellow-200 rounded-2xl p-6">
+                                         <div className="bg-yellow-50 dark:bg-yellow-900/20 border-4 border-yellow-200 dark:border-yellow-700 rounded-2xl p-6">
                                             <span className="block text-slate-400 font-bold uppercase text-xs mb-1">Total Initiative</span>
                                             <span className="text-6xl font-black text-yellow-500">{rollData.total}</span>
                                         </div>
                                     ) : (
-                                        <div className="bg-green-50 border-4 border-green-200 rounded-2xl p-6">
+                                        <div className="bg-green-50 dark:bg-green-900/20 border-4 border-green-200 dark:border-green-700 rounded-2xl p-6">
                                             <span className="block text-slate-400 font-bold uppercase text-xs mb-1">Successes</span>
                                             <span className="text-6xl font-black text-green-600">{rollData.successes}</span>
                                         </div>
@@ -1190,7 +1354,7 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     <div className="flex gap-4 mt-6">
                                          <button 
                                             onClick={() => setRollData(prev => ({ ...prev, isOpen: false }))}
-                                            className="flex-1 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+                                            className="flex-1 py-3 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                          >
                                             Done
                                          </button>

@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
   },
   server: {
+    port: 5173,
     headers: {
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
     },
