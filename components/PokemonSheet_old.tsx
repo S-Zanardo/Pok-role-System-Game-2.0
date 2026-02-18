@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PokemonData, Language, PokemonCharacter } from '../types';
 import { ArrowLeft, Plus, Trash2, Search, X, Edit2, Monitor, ChevronLeft, ChevronRight, Cloud, CloudOff, Loader2, Save, Download } from 'lucide-react';
 import { TRANSLATIONS, getTypeColor, getListImageUrl, getDetailImageUrl } from '../utils';
@@ -56,78 +56,11 @@ export const PokemonSheet = ({
     // Drag and Drop State
     const [draggedItem, setDraggedItem] = useState<{ source: 'party' | 'pc', boxIndex: number, slotIndex: number } | null>(null);
 
-    // Touch Move State
-    const [movingItem, setMovingItem] = useState<{ source: 'party' | 'pc', boxIndex: number, slotIndex: number } | null>(null);
-    const longPressTimer = useRef<any>(null);
-    const isLongPressTriggered = useRef(false);
-
     // Search State
     const [searchInput, setSearchInput] = useState(''); 
     const [activeSearch, setActiveSearch] = useState('');
 
     // --- Handlers ---
-
-    const movePokemon = (
-        source: { source: 'party' | 'pc', boxIndex: number, slotIndex: number }, 
-        target: { source: 'party' | 'pc', boxIndex: number, slotIndex: number }
-    ) => {
-        const { source: srcType, boxIndex: srcBox, slotIndex: srcSlot } = source;
-        const { source: tgtType, boxIndex: tgtBox, slotIndex: tgtSlot } = target;
-
-        if (srcType === tgtType && srcBox === tgtBox && srcSlot === tgtSlot) return;
-
-        // 1. Get Source Pokemon
-        let sourceChar: PokemonCharacter | null = null;
-        if (srcType === 'party') {
-            sourceChar = party[srcSlot];
-        } else {
-            sourceChar = pcBoxes[srcBox][srcSlot];
-        }
-
-        if (!sourceChar) return;
-
-        // 2. Get Target Pokemon (if any, for swap)
-        let targetChar: PokemonCharacter | null = null;
-        if (tgtType === 'party') {
-            targetChar = party[tgtSlot];
-        } else {
-            targetChar = pcBoxes[tgtBox][tgtSlot];
-        }
-
-        // 3. Prepare new arrays
-        const newParty = [...party];
-        const newPcBoxes = [...pcBoxes];
-        
-        // Helper to get/set (handles deep copy of specific box on write)
-        const setChar = (src: 'party' | 'pc', bIdx: number, sIdx: number, char: PokemonCharacter | null) => {
-             if (src === 'party') {
-                 newParty[sIdx] = char;
-             } else {
-                 // Clone the specific box if it hasn't been cloned yet in this operation
-                 if (newPcBoxes[bIdx] === pcBoxes[bIdx]) {
-                     newPcBoxes[bIdx] = [...pcBoxes[bIdx]];
-                 }
-                 newPcBoxes[bIdx][sIdx] = char;
-             }
-        };
-
-        // 4. Perform Swap/Move
-        
-        // Remove from Source
-        setChar(srcType, srcBox, srcSlot, null);
-
-        // Place Source at Target
-        setChar(tgtType, tgtBox, tgtSlot, sourceChar);
-
-        // If Target had a char, place it at Source (Swap)
-        if (targetChar) {
-            setChar(srcType, srcBox, srcSlot, targetChar);
-        }
-
-        // 5. Update State
-        setParty(newParty);
-        setPcBoxes(newPcBoxes);
-    };
 
     // Drag and Drop Logic
     const handleDragStart = (e: React.DragEvent, source: 'party' | 'pc', boxIndex: number, slotIndex: number) => {
@@ -146,45 +79,73 @@ export const PokemonSheet = ({
         
         if (!draggedItem) return;
 
-        movePokemon(draggedItem, { source: targetSource, boxIndex: targetBoxIndex, slotIndex: targetSlotIndex });
-        setDraggedItem(null);
-    };
+        const { source, boxIndex: sourceBoxIndex, slotIndex: sourceSlotIndex } = draggedItem;
 
-    // Touch Handlers
-    const handleTouchStart = (source: 'party' | 'pc', boxIndex: number, slotIndex: number) => {
-        isLongPressTriggered.current = false;
-        longPressTimer.current = setTimeout(() => {
-            const char = source === 'party' ? party[slotIndex] : pcBoxes[boxIndex][slotIndex];
-            if (char) {
-                setMovingItem({ source, boxIndex, slotIndex });
-                isLongPressTriggered.current = true;
-                if (navigator.vibrate) navigator.vibrate(50);
-            }
-        }, 2000); // 2 seconds long press
-    };
-
-    const handleTouchEnd = () => {
-        if (longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
+        // Prevent dropping on self
+        if (source === targetSource && sourceBoxIndex === targetBoxIndex && sourceSlotIndex === targetSlotIndex) {
+            setDraggedItem(null);
+            return;
         }
+
+        // 1. Get Source Pokemon
+        let sourceChar: PokemonCharacter | null = null;
+        if (source === 'party') {
+            sourceChar = party[sourceSlotIndex];
+        } else {
+            sourceChar = pcBoxes[sourceBoxIndex][sourceSlotIndex];
+        }
+
+        if (!sourceChar) {
+             setDraggedItem(null);
+             return;
+        }
+
+        // 2. Get Target Pokemon (if any, for swap)
+        let targetChar: PokemonCharacter | null = null;
+        if (targetSource === 'party') {
+            targetChar = party[targetSlotIndex];
+        } else {
+            targetChar = pcBoxes[targetBoxIndex][targetSlotIndex];
+        }
+
+        // 3. Prepare new arrays
+        const newParty = [...party];
+        const newPcBoxes = [...pcBoxes]; // Shallow copy of boxes array
+        
+        // Helper to get/set (handles deep copy of specific box on write)
+        const setChar = (src: 'party' | 'pc', bIdx: number, sIdx: number, char: PokemonCharacter | null) => {
+             if (src === 'party') {
+                 newParty[sIdx] = char;
+             } else {
+                 // Clone the specific box if it hasn't been cloned yet in this operation
+                 if (newPcBoxes[bIdx] === pcBoxes[bIdx]) {
+                     newPcBoxes[bIdx] = [...pcBoxes[bIdx]];
+                 }
+                 newPcBoxes[bIdx][sIdx] = char;
+             }
+        };
+
+        // 4. Perform Swap/Move
+        
+        // Remove from Source
+        setChar(source, sourceBoxIndex, sourceSlotIndex, null);
+
+        // Place Source at Target
+        setChar(targetSource, targetBoxIndex, targetSlotIndex, sourceChar);
+
+        // If Target had a char, place it at Source (Swap)
+        if (targetChar) {
+            setChar(source, sourceBoxIndex, sourceSlotIndex, targetChar);
+        }
+
+        // 5. Update State
+        setParty(newParty);
+        setPcBoxes(newPcBoxes);
+        setDraggedItem(null);
     };
 
     // Generic Click Handler for any slot (Party or PC)
     const handleSlotClick = (boxIndex: number, slotIndex: number) => {
-        // If this click was triggered by the end of a long press on the same item, ignore it to keep selection
-        if (isLongPressTriggered.current) {
-            isLongPressTriggered.current = false;
-            return;
-        }
-
-        if (movingItem) {
-            const targetSource = boxIndex === -1 ? 'party' : 'pc';
-            movePokemon(movingItem, { source: targetSource, boxIndex, slotIndex });
-            setMovingItem(null);
-            return;
-        }
-
         const char = boxIndex === -1 ? party[slotIndex] : pcBoxes[boxIndex][slotIndex];
 
         if (char === null) {
@@ -392,9 +353,6 @@ export const PokemonSheet = ({
                         className="relative"
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, 'party', -1, index)}
-                        onTouchStart={() => handleTouchStart('party', -1, index)}
-                        onTouchEnd={handleTouchEnd}
-                        onTouchMove={handleTouchEnd}
                     >
                         {char ? (
                             // Filled Party Slot
@@ -402,7 +360,7 @@ export const PokemonSheet = ({
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, 'party', -1, index)}
                                 onClick={() => handleSlotClick(-1, index)}
-                                className={`relative h-40 rounded-3xl p-5 shadow-lg overflow-hidden ${getTypeColor(char.type1)} group cursor-grab active:cursor-grabbing transform hover:scale-[1.02] transition-all ${movingItem?.source === 'party' && movingItem.slotIndex === index ? 'ring-4 ring-yellow-400 scale-95 z-50' : ''}`}
+                                className={`relative h-40 rounded-3xl p-5 shadow-lg overflow-hidden ${getTypeColor(char.type1)} group cursor-grab active:cursor-grabbing transform hover:scale-[1.02] transition-all`}
                             >
                                 <div className="absolute -right-6 -bottom-6 w-40 h-40 opacity-30 text-white pointer-events-none z-0">
                                     <PokeballIcon />
@@ -452,7 +410,7 @@ export const PokemonSheet = ({
                             // Empty Party Slot
                             <div 
                                 onClick={() => handleSlotClick(-1, index)}
-                                className={`h-40 rounded-3xl border-4 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200 group ${movingItem?.source === 'party' && movingItem.slotIndex === index ? 'ring-4 ring-yellow-400' : ''}`}
+                                className="h-40 rounded-3xl border-4 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200 group"
                             >
                                 <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                                     <Plus size={24} />
@@ -512,16 +470,13 @@ export const PokemonSheet = ({
                                 className="aspect-square relative group"
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, 'pc', currentBoxIndex, slotIndex)}
-                                onTouchStart={() => handleTouchStart('pc', currentBoxIndex, slotIndex)}
-                                onTouchEnd={handleTouchEnd}
-                                onTouchMove={handleTouchEnd}
                             >
                                 {char ? (
                                     <div 
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, 'pc', currentBoxIndex, slotIndex)}
                                         onClick={() => handleSlotClick(currentBoxIndex, slotIndex)}
-                                        className={`w-full h-full rounded-xl shadow-md overflow-hidden ${getTypeColor(char.type1)} cursor-grab active:cursor-grabbing transition-transform hover:scale-105 border-2 border-white/20 ${movingItem?.source === 'pc' && movingItem.boxIndex === currentBoxIndex && movingItem.slotIndex === slotIndex ? 'ring-4 ring-yellow-400 scale-95 z-50' : ''}`}
+                                        className={`w-full h-full rounded-xl shadow-md overflow-hidden ${getTypeColor(char.type1)} cursor-grab active:cursor-grabbing transition-transform hover:scale-105 border-2 border-white/20`}
                                     >
                                         <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
                                             <PokeballIcon />
@@ -548,7 +503,7 @@ export const PokemonSheet = ({
                                 ) : (
                                     <div 
                                         onClick={() => handleSlotClick(currentBoxIndex, slotIndex)}
-                                        className={`w-full h-full rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 flex flex-col items-center justify-center text-slate-400 hover:bg-white hover:border-slate-400 transition-colors cursor-pointer ${movingItem?.source === 'pc' && movingItem.boxIndex === currentBoxIndex && movingItem.slotIndex === slotIndex ? 'ring-4 ring-yellow-400' : ''}`}
+                                        className="w-full h-full rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 flex flex-col items-center justify-center text-slate-400 hover:bg-white hover:border-slate-400 transition-colors cursor-pointer"
                                     >
                                         <Plus size={20} className="opacity-50" />
                                     </div>
