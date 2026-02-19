@@ -39,6 +39,7 @@ interface RollState {
         name: string;
         type: string;
         damagePool?: string;
+        power?: number;
     };
 }
 
@@ -282,7 +283,8 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
             activeMove = {
                 name: moveData.Name,
                 type: moveData.Type,
-                damagePool: dmgString
+                damagePool: dmgString,
+                power: moveData.Power
             };
         }
         
@@ -318,6 +320,8 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
         if (parts[1]) {
             val2 = resolveStatValue(parts[1]);
         }
+
+        const power = rollData.activeMove.power || 0;
         
         // Calculate Bonuses
         let stabBonus = 0;
@@ -330,9 +334,10 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
             critBonus = 2;
         }
 
-        const totalBonus = val2 + stabBonus + critBonus;
+        const totalBonus = val2 + power + stabBonus + critBonus;
         const labelParts = [];
         if (val2 > 0) labelParts.push(`Base(${val2})`);
+        if (power > 0) labelParts.push(`Power(+${power})`);
         if (stabBonus > 0) labelParts.push("STAB(+1)");
         if (critBonus > 0) labelParts.push("Crit(+2)");
         const bonusLabel = labelParts.length > 0 ? labelParts.join(' ') : "Bonus";

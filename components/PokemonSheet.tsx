@@ -597,7 +597,7 @@ export const PokemonSheet = ({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {filteredList.map(poke => (
                                     <button
-                                        key={poke.Number}
+                                        key={`${poke.Number}-${poke.Name}`}
                                         onClick={() => handleSelectPokemon(poke)}
                                         className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 text-left"
                                     >
