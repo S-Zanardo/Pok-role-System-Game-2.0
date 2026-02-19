@@ -75,9 +75,19 @@ export const MoveDetail = ({ moveName, filePath, onClose, language, onRoll }: Mo
              {data ? (
                  <>
                     <h2 className="text-3xl font-extrabold tracking-tight pr-8">{getLocalizedMoveName(data.Name, language)}</h2>
-                    <span className="inline-block px-3 py-1 mt-2 text-xs font-bold bg-white/25 rounded-full backdrop-blur-md uppercase tracking-wider">
+{/*                 <span className="inline-block px-3 py-1 mt-2 text-xs font-bold bg-white/25 rounded-full backdrop-blur-md uppercase tracking-wider">
                         {getLocalizedType(data.Type, language)}
                     </span>
+*/}                 <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-block px-3 py-1 text-xs font-bold bg-white/25 rounded-full backdrop-blur-md uppercase tracking-wider">
+                            {getLocalizedType(data.Type, language)}
+                        </span>
+                        {data.Category && (
+                            <span className="inline-block px-3 py-1 text-xs font-bold bg-white/25 rounded-full backdrop-blur-md uppercase tracking-wider">
+                                {data.Category}
+                            </span>
+                        )}
+                    </div>
                  </>
              ) : (
                  <h2 className="text-2xl font-bold">{getLocalizedMoveName(moveName, language)}</h2>

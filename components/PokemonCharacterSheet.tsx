@@ -832,6 +832,43 @@ export const PokemonCharacterSheet = ({ character, baseData, moveFileMap, abilit
                                     </div>
                                 </div>
                              </div>
+                             {/* Abilities Section */}
+                             {baseData && (
+                                <div className="bg-indigo-900/80 p-3 rounded-2xl border-4 border-indigo-800 shadow-md">
+                                    <h3 className="text-indigo-100 font-bold uppercase text-xs mb-2 flex items-center gap-2">
+                                        <Star className="w-4 h-4 text-yellow-400" /> {t.abilities}
+                                    </h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {baseData.Ability1 && (
+                                            <button 
+                                                onClick={() => handleAbilityClick(baseData.Ability1)}
+                                                className="flex-1 min-w-[100px] px-3 py-2 bg-indigo-100 hover:bg-white text-indigo-900 rounded-lg font-bold text-xs transition-colors shadow-sm border border-indigo-200 text-left flex flex-col"
+                                            >
+                                                <span className="text-[9px] uppercase opacity-60 tracking-wider">{t.primary}</span>
+                                                <span className="truncate">{getLocalizedAbility(baseData.Ability1, language)}</span>
+                                            </button>
+                                        )}
+                                        {baseData.Ability2 && (
+                                            <button 
+                                                onClick={() => handleAbilityClick(baseData.Ability2!)}
+                                                className="flex-1 min-w-[100px] px-3 py-2 bg-indigo-100 hover:bg-white text-indigo-900 rounded-lg font-bold text-xs transition-colors shadow-sm border border-indigo-200 text-left flex flex-col"
+                                            >
+                                                <span className="text-[9px] uppercase opacity-60 tracking-wider">{t.secondary}</span>
+                                                <span className="truncate">{getLocalizedAbility(baseData.Ability2, language)}</span>
+                                            </button>
+                                        )}
+                                        {baseData.HiddenAbility && (
+                                            <button 
+                                                onClick={() => handleAbilityClick(baseData.HiddenAbility!)}
+                                                className="flex-1 min-w-[100px] px-3 py-2 bg-purple-100 hover:bg-white text-purple-900 rounded-lg font-bold text-xs transition-colors shadow-sm border border-purple-200 text-left flex flex-col"
+                                            >
+                                                <span className="text-[9px] uppercase opacity-60 tracking-wider">{t.hidden}</span>
+                                                <span className="truncate">{getLocalizedAbility(baseData.HiddenAbility, language)}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                             )}
                         </div>
                      </div>
                 </div>
