@@ -1,11 +1,13 @@
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { PokemonCharacter } from "../types";
+import { TrainerData, createInitialTrainer } from "../utils";
 
 // Definisci l'interfaccia dei dati che vuoi salvare
 export interface UserData {
   party: (PokemonCharacter | null)[];
   pcBoxes: (PokemonCharacter | null)[][];
+  trainer?: TrainerData;
 }
 
 /**
@@ -30,7 +32,8 @@ export const saveUserData = async (userId: string, data: UserData) => {
 
     const dataToSave = {
         party: cleanData.party,
-        pcBoxes: pcBoxesMap
+        pcBoxes: pcBoxesMap,
+        trainer: cleanData.trainer
     };
 
     console.log("Dati inviati a Firebase:", dataToSave);
@@ -71,7 +74,8 @@ export const loadUserData = async (userId: string): Promise<UserData | null> => 
 
       return {
           party: firestoreData.party || Array(6).fill(null),
-          pcBoxes: loadedPcBoxes
+          pcBoxes: loadedPcBoxes,
+          trainer: firestoreData.trainer || createInitialTrainer()
       };
     } else {
       console.log("Nessun dato trovato per questo utente (nuovo utente?).");

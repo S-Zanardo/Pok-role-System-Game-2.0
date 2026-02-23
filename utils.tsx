@@ -12,6 +12,14 @@ export const ALL_RANKS = [
   'Starter', 'Beginner', 'Amateur', 'Ace', 'Pro', 'Master', 'Champion'
 ];
 
+export const ALL_NATURES = [
+    "Hardy", "Lonely", "Brave", "Adamant", "Naughty",
+    "Bold", "Docile", "Relaxed", "Impish", "Lax",
+    "Timid", "Hasty", "Serious", "Jolly", "Naive",
+    "Modest", "Mild", "Quiet", "Bashful", "Rash",
+    "Calm", "Gentle", "Sassy", "Careful", "Quirky"
+];
+
 export const STATUS_CONDITIONS = [
     'Neutral', 'Burn', 'Freeze', 'Paralysis', 'Poison', 'Bad Poison', 'Sleep', 'Confused', 'Infatuated', 'Fainted'
 ];
@@ -250,8 +258,14 @@ export const TRANSLATIONS = {
     removeFromParty: "Remove",
     selectPokemon: "Select Pokémon",
     nickname: "Nickname",
+    money: "Money",
+    caught: "Caught",
+    seen: "Seen",
+    trainerSheet: "Trainer Sheet",
+    playerName: "Player Name",
     sheet: {
         nature: "Nature",
+        age: "Age",
         confidence: "Confidence",
         happiness: "Happiness",
         loyalty: "Loyalty",
@@ -377,8 +391,14 @@ export const TRANSLATIONS = {
     removeFromParty: "Rimuovi",
     selectPokemon: "Seleziona Pokémon",
     nickname: "Soprannome",
+    money: "Soldi",
+    caught: "Catturati",
+    seen: "Visti",
+    trainerSheet: "Scheda Allenatore",
+    playerName: "Nome Giocatore",
     sheet: {
         nature: "Natura",
+        age: "Età",
         confidence: "Sicurezza",
         happiness: "Felicità",
         loyalty: "Lealtà",
@@ -504,8 +524,14 @@ export const TRANSLATIONS = {
     removeFromParty: "Quitar",
     selectPokemon: "Seleccionar Pokémon",
     nickname: "Apodo",
+    money: "Dinero",
+    caught: "Capturados",
+    seen: "Vistos",
+    trainerSheet: "Ficha de Entrenador",
+    playerName: "Nombre Jugador",
     sheet: {
         nature: "Naturaleza",
+        age: "Edad",
         confidence: "Confianza",
         happiness: "Felicidad",
         loyalty: "Lealtad",
@@ -631,8 +657,14 @@ export const TRANSLATIONS = {
     removeFromParty: "Entfernen",
     selectPokemon: "Pokémon auswählen",
     nickname: "Spitzname",
+    money: "Geld",
+    caught: "Gefangen",
+    seen: "Gesehen",
+    trainerSheet: "Trainerblatt",
+    playerName: "Spielername",
     sheet: {
         nature: "Wesen",
+        age: "Alter",
         confidence: "Selbstvertr.",
         happiness: "Freundschaft",
         loyalty: "Loyalität",
@@ -758,8 +790,14 @@ export const TRANSLATIONS = {
     removeFromParty: "Retirer",
     selectPokemon: "Sélectionner Pokémon",
     nickname: "Surnom",
+    money: "Argent",
+    caught: "Attrapés",
+    seen: "Vus",
+    trainerSheet: "Fiche Dresseur",
+    playerName: "Nom Joueur",
     sheet: {
         nature: "Nature",
+        age: "Âge",
         confidence: "Confiance",
         happiness: "Bonheur",
         loyalty: "Loyauté",
@@ -899,5 +937,58 @@ export const createInitialPokemon = (data: PokemonData): PokemonCharacter => {
         size: `${data.Height.Meters}m`,
         weight: `${data.Weight.Kilograms}kg`,
         image: data.Image
+    };
+};
+
+export interface TrainerData {
+    name: string;
+    age: number;
+    image: string | null;
+    money: number;
+    pokedex: {
+        seen: number;
+        caught: number;
+    };
+    nature: string;
+    confidence: number;
+    attributes: {
+        strength: { current: number; max: number };
+        dexterity: { current: number; max: number };
+        vitality: { current: number; max: number };
+        special: { current: number; max: number };
+        insight: { current: number; max: number };
+    };
+    skills: {
+        fight: { brawl: number; channel: number; clash: number; evasion: number };
+        survival: { alert: number; athletic: number; nature: number; stealth: number };
+        social: { allure: number; etiquette: number; intimidate: number; perform: number };
+    };
+    hp: { current: number; max: number };
+    will: { current: number; max: number };
+}
+
+export const createInitialTrainer = (): TrainerData => {
+    return {
+        name: "New Trainer",
+        age: 10,
+        image: null,
+        money: 1500,
+        pokedex: { seen: 0, caught: 0 },
+        nature: "Hardy",
+        confidence: 2,
+        attributes: {
+            strength: { current: 2, max: 5 },
+            dexterity: { current: 2, max: 5 },
+            vitality: { current: 2, max: 5 },
+            special: { current: 2, max: 5 },
+            insight: { current: 2, max: 5 },
+        },
+        skills: {
+            fight: { brawl: 0, channel: 0, clash: 0, evasion: 0 },
+            survival: { alert: 0, athletic: 0, nature: 0, stealth: 0 },
+            social: { allure: 0, etiquette: 0, intimidate: 0, perform: 0 },
+        },
+        hp: { current: 4, max: 4 },
+        will: { current: 4, max: 4 },
     };
 };

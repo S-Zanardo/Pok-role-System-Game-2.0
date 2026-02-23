@@ -3,6 +3,7 @@ import { PokemonData, Region, Language, ItemData, PokemonCharacter } from './typ
 import { Loader2, RefreshCw } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { saveUserData, loadUserData } from './services/persistence';
+import { TrainerData, createInitialTrainer } from './utils';
 
 // Components
 import { HomePage } from './components/HomePage';
@@ -10,6 +11,7 @@ import { ComingSoon } from './components/ComingSoon';
 import { RegionSelect } from './components/RegionSelect';
 import { PokemonList } from './components/PokemonList';
 import { PokemonDetail } from './components/PokemonDetail';
+import CharacterSheet from './components/CharacterSheet';
 import { PokemonSheet } from './components/PokemonSheet';
 import { ItemList } from './components/ItemList';
 import { ProgressBar } from './components/Shared';
@@ -34,6 +36,7 @@ function AppContent() {
   // Navigation State
   const [appMode, setAppMode] = useState<'home' | 'pokedex' | 'character' | 'pokemon' | 'items'>('home');
   const [pokedexView, setPokedexView] = useState<'regions' | 'list' | 'detail'>('regions');
+  const [previousMode, setPreviousMode] = useState<'home' | 'character'>('home');
   
   const [selectedRegion, setSelectedRegion] = useState<Region>('National');
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonData | null>(null);
@@ -48,6 +51,7 @@ function AppContent() {
   const [pc, setPc] = useState<(PokemonCharacter | null)[][]>(
       Array(20).fill(null).map(() => Array(30).fill(null))
   );
+  const [trainer, setTrainer] = useState<TrainerData>(createInitialTrainer());
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   
   // Store maps for on-demand fetching
@@ -245,15 +249,18 @@ function AppContent() {
             // Usa i dati caricati SOLO se validi (lunghezza corretta), altrimenti usa default
             const loadedParty = (data?.party && data.party.length === 6) ? data.party : defaultParty;
             const loadedPc = (data?.pcBoxes && data.pcBoxes.length === 20) ? data.pcBoxes : defaultPc;
+            const loadedTrainer = data?.trainer || createInitialTrainer();
             
             setParty(loadedParty);
             setPc(loadedPc);
+            setTrainer(loadedTrainer);
             setIsDataLoaded(true);
         });
     } else {
         // Reset alla struttura di default (NON array vuoti) quando non loggato
         setParty(Array(6).fill(null));
         setPc(Array(20).fill(null).map(() => Array(30).fill(null)));
+        setTrainer(createInitialTrainer());
         setIsDataLoaded(false);
     }
   }, [user]);
@@ -262,7 +269,7 @@ function AppContent() {
   const handleManualSave = async () => {
       if (!user) return;
       try {
-          await saveUserData(user.uid, { party, pcBoxes: pc });
+          await saveUserData(user.uid, { party, pcBoxes: pc, trainer });
           alert("Salvataggio completato con successo!");
       } catch (e) {
           console.error("Errore salvataggio:", e);
@@ -280,9 +287,11 @@ function AppContent() {
 
           const loadedParty = (data.party && Array.isArray(data.party) && data.party.length === 6) ? data.party : defaultParty;
           const loadedPc = (data.pcBoxes && Array.isArray(data.pcBoxes)) ? data.pcBoxes : defaultPc;
+          const loadedTrainer = data.trainer || createInitialTrainer();
 
           setParty(loadedParty);
           setPc(loadedPc);
+          setTrainer(loadedTrainer);
           alert("Dati ricaricati dal cloud!");
       }
   };
@@ -351,7 +360,10 @@ function AppContent() {
             {/* Home Page */}
             {appMode === 'home' && (
                 <HomePage 
-                    onNavigate={setAppMode}
+                    onNavigate={(mode) => {
+                        if (mode === 'pokemon') setPreviousMode('home');
+                        setAppMode(mode);
+                    }}
                     isDark={isDarkMode}
                     toggleTheme={toggleTheme}
                     language={language}
@@ -359,11 +371,20 @@ function AppContent() {
                 />
             )}
 
-            {/* Character Sheet Placeholder */}
+            {/* Character Sheet */}
             {appMode === 'character' && (
-                <ComingSoon 
+                <CharacterSheet 
+                    trainer={trainer}
+                    setTrainer={setTrainer}
                     onBack={() => setAppMode('home')}
                     language={language}
+                    onSave={handleManualSave}
+                    natureMap={natureFileMap}
+                    party={party}
+                    onManagePokemon={() => {
+                        setPreviousMode('character');
+                        setAppMode('pokemon');
+                    }}
                 />
             )}
 
@@ -379,7 +400,7 @@ function AppContent() {
             {/* Pokemon Party Sheet */}
             {appMode === 'pokemon' && (
                 <PokemonSheet 
-                    onBack={() => setAppMode('home')}
+                    onBack={() => setAppMode(previousMode)}
                     allPokemon={pokemonDB}
                     language={language}
                     natureMap={natureFileMap}
