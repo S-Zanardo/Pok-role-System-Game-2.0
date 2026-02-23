@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { TrainerData, TRANSLATIONS, ALL_NATURES } from '../utils';
+import { TrainerData, TRANSLATIONS, ALL_NATURES, getTypeColor } from '../utils';
 import { Language, PokemonCharacter } from '../types';
 import { ArrowLeft, Heart, Shield, Swords, Brain, Leaf, MessageCircle, Coins, Minus, Plus, Dices, Image as ImageIcon, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -319,7 +319,7 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
                         {party.map((pokemon, index) => (
-                            <div key={index} className="aspect-square bg-slate-800/40 rounded-2xl border-2 border-slate-700/50 flex items-center justify-center relative overflow-hidden group hover:border-slate-500 transition-colors">
+                            <div key={index} className={`aspect-square rounded-2xl border-2 border-slate-700/50 flex items-center justify-center relative overflow-hidden group hover:border-slate-500 transition-colors ${pokemon ? getTypeColor(pokemon.type1) : 'bg-slate-800/40'}`}>
                                 {pokemon ? (
                                     <>
                                         <img 
