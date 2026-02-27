@@ -12,6 +12,7 @@ import { RegionSelect } from './components/RegionSelect';
 import { PokemonList } from './components/PokemonList';
 import { PokemonDetail } from './components/PokemonDetail';
 import CharacterSheet from './components/CharacterSheet';
+import { PokemonCharacterSheet } from './components/PokemonCharacterSheet';
 import { PokemonSheet } from './components/PokemonSheet';
 import { ItemList } from './components/ItemList';
 import { ProgressBar } from './components/Shared';
@@ -53,6 +54,7 @@ function AppContent() {
   );
   const [trainer, setTrainer] = useState<TrainerData>(createInitialTrainer());
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [editingPokemon, setEditingPokemon] = useState<PokemonCharacter | null>(null);
   
   // Store maps for on-demand fetching
   const [moveFileMap, setMoveFileMap] = useState<Record<string, string>>({});
@@ -381,9 +383,14 @@ function AppContent() {
                     onSave={handleManualSave}
                     natureMap={natureFileMap}
                     party={party}
+                    items={itemsDB}
                     onManagePokemon={() => {
                         setPreviousMode('character');
                         setAppMode('pokemon');
+                    }}
+                    onEditPokemon={(p) => setEditingPokemon(p)}
+                    onUpdatePokemon={(updated) => {
+                        setParty(prev => prev.map(p => (p && p.id === updated.id) ? updated : p));
                     }}
                 />
             )}
@@ -451,6 +458,22 @@ function AppContent() {
                         />
                     )}
                 </>
+            )}
+
+            {/* Pokemon Editor Overlay (from Character Sheet) */}
+            {editingPokemon && (
+                <PokemonCharacterSheet 
+                    character={editingPokemon}
+                    baseData={pokemonDB.find(p => p.Number === editingPokemon.dexId)}
+                    moveFileMap={moveFileMap}
+                    abilityFileMap={abilityFileMap}
+                    language={language}
+                    onSave={(updated) => {
+                        setParty(prev => prev.map(p => (p && p.id === updated.id) ? updated : p));
+                    }}
+                    onClose={() => setEditingPokemon(null)}
+                    natureMap={natureFileMap}
+                />
             )}
         </div>
   );

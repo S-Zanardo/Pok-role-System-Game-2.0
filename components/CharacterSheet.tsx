@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
-import { TrainerData, TRANSLATIONS, ALL_NATURES, getTypeColor } from '../utils';
-import { Language, PokemonCharacter } from '../types';
-import { ArrowLeft, Heart, Shield, Swords, Brain, Leaf, MessageCircle, Coins, Minus, Plus, Dices, Image as ImageIcon, Save } from 'lucide-react';
+import { TrainerData, TRANSLATIONS, ALL_NATURES, getTypeColor, InventoryItem, getItemImageUrl } from '../utils';
+import { Language, PokemonCharacter, ItemData } from '../types';
+import { ArrowLeft, Heart, Shield, Swords, Brain, Leaf, MessageCircle, Coins, Minus, Plus, Dices, Image as ImageIcon, Save, Briefcase, X, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CharacterSheetProps {
@@ -12,13 +12,20 @@ interface CharacterSheetProps {
   onSave?: () => void;
   natureMap?: Record<string, string>;
   party?: (PokemonCharacter | null)[];
+  items: ItemData[];
   onManagePokemon?: () => void;
+  onEditPokemon?: (pokemon: PokemonCharacter) => void;
+  onUpdatePokemon?: (pokemon: PokemonCharacter) => void;
 }
 
-const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, language, onBack, onSave, natureMap, party, onManagePokemon }) => {
+const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, language, onBack, onSave, natureMap, party, items, onManagePokemon, onEditPokemon, onUpdatePokemon }) => {
   const t = TRANSLATIONS[language];
   const { user } = useAuth();
   const mainColor = 'bg-slate-600'; // Colore tema per l'allenatore
+  const [isInventoryOpen, setIsInventoryOpen] = React.useState(false);
+  const [isItemSelectorOpen, setIsItemSelectorOpen] = React.useState(false);
+  const [selectorTargetPocket, setSelectorTargetPocket] = React.useState<'small' | 'main'>('main');
+  const [itemSearchTerm, setItemSearchTerm] = React.useState('');
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -108,6 +115,133 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
       return image;
   };
 
+  const updatePotion = (type: string, field: 'count' | 'used', delta: number) => {
+      setTrainer((prev: any) => {
+          const potions = prev.potions || { potion: { count: 0, used: 0 }, superPotion: { count: 0, used: 0 }, hyperPotion: { count: 0, used: 0 } };
+          const current = potions[type] || { count: 0, used: 0 };
+          
+          let newVal = (current[field] || 0) + delta;
+          if (newVal < 0) newVal = 0;
+
+          // Constraints
+          const healMap: Record<string, number> = { potion: 2, superPotion: 4, hyperPotion: 14 };
+          const heal = healMap[type];
+          
+          if (field === 'used') {
+              const max = current.count * heal;
+              if (newVal > max) newVal = max;
+          }
+          
+          // If count changes, clamp used
+          let newUsed = field === 'used' ? newVal : current.used;
+          if (field === 'count') {
+              const newMax = newVal * heal;
+              if (newUsed > newMax) newUsed = newMax;
+          }
+
+          return {
+              ...prev,
+              potions: {
+                  ...potions,
+                  [type]: {
+                      ...current,
+                      count: field === 'count' ? newVal : current.count,
+                      used: newUsed
+                  }
+              }
+          };
+      });
+  };
+
+  const handlePotionDrop = (e: React.DragEvent, pokemon: PokemonCharacter) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const potionType = e.dataTransfer.getData('potionType');
+      const healAmountStr = e.dataTransfer.getData('healAmount');
+
+      if (!potionType || !healAmountStr || !pokemon) return;
+
+      // Check if Pokemon is fainted
+      if (pokemon.hp.current === 0) {
+          const msg = language === 'it' ? "Non è possibile curare un Pokémon esausto con una pozione!" : "Cannot heal a fainted Pokémon with a potion!";
+          alert(msg);
+          return;
+      }
+
+      if (pokemon.hp.current >= pokemon.hp.max) return; // Already full
+
+      const healPerUnit = parseInt(healAmountStr);
+      const pData = (trainer as any).potions?.[potionType] || { count: 0, used: 0 };
+      const totalHp = pData.count * healPerUnit;
+      const remainingPotionHp = totalHp - pData.used;
+
+      if (remainingPotionHp <= 0) {
+          const msg = language === 'it' ? "Pozione esaurita!" : "Potion pool is empty!";
+          alert(msg);
+          return;
+      }
+
+      const missingHp = pokemon.hp.max - pokemon.hp.current;
+      const amountToHeal = Math.min(missingHp, remainingPotionHp);
+
+      // Update Potion Usage
+      updatePotion(potionType, 'used', amountToHeal);
+
+      // Update Pokemon HP
+      if (onUpdatePokemon) {
+          const updatedPokemon = { ...pokemon, hp: { ...pokemon.hp, current: pokemon.hp.current + amountToHeal } };
+          onUpdatePokemon(updatedPokemon);
+      }
+  };
+
+  const addItem = (pocket: 'small' | 'main') => {
+      setSelectorTargetPocket(pocket);
+      setItemSearchTerm('');
+      setIsItemSelectorOpen(true);
+  };
+
+  const handleSelectItem = (item: ItemData) => {
+      if (selectorTargetPocket === 'small') {
+          // Constraint: Only HeldItems and Medicine in Small Pocket
+          if (item.Pocket !== 'HeldItems' && item.Pocket !== 'Medicine') {
+              const msg = language === 'it' 
+                  ? "Nella Small Pocket puoi inserire solo oggetti di tipo 'HeldItems' o 'Medicine'." 
+                  : "You can only put 'HeldItems' or 'Medicine' in the Small Pocket.";
+              alert(msg);
+              return;
+          }
+      }
+
+      const newItem: InventoryItem = {
+          id: crypto.randomUUID(),
+          name: item.Name,
+          count: 1,
+          pocket: selectorTargetPocket,
+          description: item.Description,
+          image: getItemImageUrl(item)
+      };
+
+      setTrainer(prev => ({
+          ...prev,
+          inventory: [...(prev.inventory || []), newItem]
+      }));
+      
+      setIsItemSelectorOpen(false);
+  };
+
+  const updateItemCount = (id: string, delta: number) => {
+      setTrainer(prev => ({
+          ...prev,
+          inventory: (prev.inventory || []).map(item => {
+              if (item.id === id) {
+                  return { ...item, count: Math.max(0, item.count + delta) };
+              }
+              return item;
+          }).filter(item => item.count > 0)
+      }));
+  };
+
   // --- Helper Components (replicati da PokemonCharacterSheet per mantenere lo stile) ---
 
   const AttributeDots = ({ label, current, max, onChangeCurrent }: { label: string, current: number, max: number, onChangeCurrent: (v: number) => void }) => (
@@ -178,6 +312,70 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
        </div>
     </div>
   );
+
+  const PotionRow = ({ type, label, heal, image }: { type: string, label: string, heal: number, image: string }) => {
+      const pData = (trainer as any).potions?.[type] || { count: 0, used: 0 };
+      const totalHp = pData.count * heal;
+      const remaining = totalHp - pData.used;
+      
+      // Calculate dots for the "current" unit
+      let currentUnitHP = remaining > 0 ? (remaining % heal) : 0;
+      if (currentUnitHP === 0 && remaining > 0) currentUnitHP = heal;
+      
+      return (
+        <div className="bg-black/20 rounded-xl p-2 flex items-center justify-between mb-2">
+            <div className="flex flex-col">
+                <span className="text-xs font-bold text-white uppercase">{label}</span>
+                <span className="text-[10px] text-white/60">{heal} HP / unit</span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+                {/* Qty */}
+                <div className="flex flex-col items-center">
+                    <span className="text-[8px] text-white/50 uppercase">Qty</span>
+                    <div className="flex items-center gap-1 bg-slate-700/50 rounded px-1">
+                        <button onClick={() => updatePotion(type, 'count', -1)} className="text-white hover:text-red-400"><Minus size={12}/></button>
+                        <span className="text-sm font-bold text-white w-4 text-center">{pData.count}</span>
+                        <button onClick={() => updatePotion(type, 'count', 1)} className="text-white hover:text-green-400"><Plus size={12}/></button>
+                    </div>
+                </div>
+
+                {/* Usage */}
+                <div className="flex flex-col items-center min-w-[80px]">
+                     <span className="text-[8px] text-white/50 uppercase">HP Pool</span>
+                     <div className="flex items-center gap-2">
+                        <button onClick={() => updatePotion(type, 'used', 1)} className="text-white hover:text-red-400" disabled={remaining <= 0} title="Use HP"><Minus size={12}/></button>
+                        
+                        <div className="flex flex-col items-center">
+                            <div className={`gap-1 ${heal === 14 ? 'grid grid-cols-7' : 'flex flex-wrap justify-center max-w-[80px]'}`}>
+                                {Array.from({ length: heal }).map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className={`w-2.5 h-2.5 rounded-full border border-slate-500 transition-colors duration-200 ${
+                                            i < currentUnitHP ? 'bg-green-500 border-green-400 shadow-[0_0_5px_rgba(34,197,94,0.6)]' : 'bg-slate-800/50'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                            <span className="text-[9px] text-white/40 mt-1 font-mono">{remaining}/{totalHp}</span>
+                        </div>
+
+                        <button onClick={() => updatePotion(type, 'used', -1)} className="text-white hover:text-green-400" disabled={pData.used <= 0} title="Restore HP"><Plus size={12}/></button>
+                     </div>
+                </div>
+
+                {/* Image */}
+                <img 
+                    src={image} 
+                    alt={label} 
+                    className="w-8 h-8 object-contain ml-1 cursor-grab active:cursor-grabbing" 
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData('potionType', type); e.dataTransfer.setData('healAmount', heal.toString()); }}
+                />
+            </div>
+        </div>
+      );
+  };
 
   // Calcolo statistiche derivate
   const initiative = trainer.attributes.dexterity.current + trainer.skills.survival.alert;
@@ -319,7 +517,18 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
                         {party.map((pokemon, index) => (
-                            <div key={index} className={`aspect-square rounded-2xl border-2 border-slate-700/50 flex items-center justify-center relative overflow-hidden group hover:border-slate-500 transition-colors ${pokemon ? getTypeColor(pokemon.type1) : 'bg-slate-800/40'}`}>
+                            <div 
+                                key={index} 
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => pokemon && handlePotionDrop(e, pokemon)}
+                                onClick={(e) => {
+                                    if (pokemon && onEditPokemon) {
+                                        e.stopPropagation();
+                                        onEditPokemon(pokemon);
+                                    }
+                                }}
+                                className={`aspect-square rounded-2xl border-2 border-slate-700/50 flex items-center justify-center relative overflow-hidden group hover:border-slate-500 transition-colors ${pokemon ? getTypeColor(pokemon.type1) + (onEditPokemon ? ' cursor-pointer hover:scale-105' : '') : 'bg-slate-800/40'}`}
+                            >
                                 {pokemon ? (
                                     <>
                                         <img 
@@ -327,8 +536,17 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
                                             alt={pokemon.nickname}
                                             className="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-110 drop-shadow-md" 
                                         />
-                                        <div className="absolute bottom-0 inset-x-0 bg-black/60 p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span className="text-[10px] font-bold text-white truncate block">{pokemon.nickname}</span>
+                                        
+                                        {/* Stats with Icons */}
+                                        <div className="absolute bottom-1 inset-x-1 flex justify-center gap-1 pointer-events-none">
+                                             <div className="flex items-center gap-1 bg-black/60 rounded-full px-2 py-0.5 backdrop-blur-sm shadow-sm">
+                                                 <Heart size={10} className="text-red-500 fill-red-500" />
+                                                 <span className="text-[10px] font-bold text-white leading-none">{pokemon.hp.current}/{pokemon.hp.max}</span>
+                                             </div>
+                                             <div className="flex items-center gap-1 bg-black/60 rounded-full px-2 py-0.5 backdrop-blur-sm shadow-sm">
+                                                 <Brain size={10} className="text-blue-500 fill-blue-500" />
+                                                 <span className="text-[10px] font-bold text-white leading-none">{pokemon.will.current}/{pokemon.will.max}</span>
+                                             </div>
                                         </div>
                                     </>
                                 ) : (
@@ -466,6 +684,36 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
                         </div>
                      </div>
 
+                    {/* Items Section (Click to open Inventory) */}
+                    <div 
+                        onClick={() => setIsInventoryOpen(true)}
+                        className="bg-blue-900/80 p-4 rounded-3xl border-4 border-blue-800 shadow-lg cursor-pointer hover:scale-[1.02] transition-transform group"
+                    >
+                        <h3 className="text-blue-100 font-bold uppercase text-lg mb-3 flex items-center gap-2">
+                            <Briefcase className="w-6 h-6 text-blue-300 group-hover:text-white transition-colors" /> {t.sheet.item}s
+                        </h3>
+                        <div className="flex flex-col">
+                            <PotionRow 
+                                type="potion" 
+                                label="Potion" 
+                                heal={2} 
+                                image="https://raw.githubusercontent.com/Pokerole-Software-Development/Pokerole-Data/master/images/ItemSprites/potion.png" 
+                            />
+                            <PotionRow 
+                                type="superPotion" 
+                                label="Super Potion" 
+                                heal={4} 
+                                image="https://raw.githubusercontent.com/Pokerole-Software-Development/Pokerole-Data/master/images/ItemSprites/super-potion.png" 
+                            />
+                            <PotionRow 
+                                type="hyperPotion" 
+                                label="Hyper Potion" 
+                                heal={14} 
+                                image="https://raw.githubusercontent.com/Pokerole-Software-Development/Pokerole-Data/master/images/ItemSprites/hyper-potion.png" 
+                            />
+                        </div>
+                    </div>
+
                     {/* Money Section */}
                     <div className="bg-yellow-600/90 p-4 rounded-3xl border-4 border-yellow-700 shadow-lg">
                         <h3 className="text-yellow-100 font-bold uppercase text-lg mb-2 flex items-center gap-2">
@@ -485,6 +733,122 @@ const CharacterSheet: React.FC<CharacterSheetProps> = ({ trainer, setTrainer, la
                 </div>
             </div>
         </div>
+
+        {/* Inventory Modal */}
+        {isInventoryOpen && (
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsInventoryOpen(false)}>
+                <div className="bg-slate-900 border-4 border-blue-500 rounded-3xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="bg-blue-600 p-4 flex justify-between items-center shrink-0">
+                        <h2 className="text-2xl font-black text-white uppercase tracking-widest flex items-center gap-3">
+                            <Briefcase size={32} /> {t.sheet.item}s
+                        </h2>
+                        <button onClick={() => setIsInventoryOpen(false)} className="text-white hover:text-blue-200 transition-colors">
+                            <X size={32} />
+                        </button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                        {/* Small Pocket */}
+                        <div className="flex-1 p-4 border-b md:border-b-0 md:border-r border-blue-700/50 bg-blue-900/20 overflow-y-auto custom-scrollbar">
+                            <div className="flex justify-between items-center mb-4 sticky top-0 bg-blue-900/90 p-2 rounded-xl backdrop-blur-md z-10">
+                                <h3 className="text-xl font-bold text-blue-300 uppercase">Small Pocket <span className="text-xs opacity-60 block md:inline">(Battle)</span></h3>
+                                <button onClick={() => addItem('small')} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-full text-white shadow-lg"><Plus size={20}/></button>
+                            </div>
+                            <div className="space-y-2">
+                                {trainer.inventory?.filter(i => i.pocket === 'small').map(item => (
+                                    <div key={item.id} className="bg-slate-800 p-3 rounded-xl flex justify-between items-center border border-slate-700 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            {item.image && <img src={item.image} alt={item.name} className="w-8 h-8 object-contain" />}
+                                            <span className="font-bold text-white">{item.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-black/30 rounded-lg px-2 py-1">
+                                            <button onClick={() => updateItemCount(item.id, -1)} className="text-slate-400 hover:text-red-400"><Minus size={16}/></button>
+                                            <span className="font-mono text-white w-6 text-center font-bold">{item.count}</span>
+                                            <button onClick={() => updateItemCount(item.id, 1)} className="text-slate-400 hover:text-green-400"><Plus size={16}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!trainer.inventory?.some(i => i.pocket === 'small')) && <p className="text-slate-500 text-center italic py-8 opacity-50">Empty Pocket</p>}
+                            </div>
+                        </div>
+
+                        {/* Main Pocket */}
+                        <div className="flex-1 p-4 bg-slate-900/50 overflow-y-auto custom-scrollbar">
+                            <div className="flex justify-between items-center mb-4 sticky top-0 bg-slate-800/90 p-2 rounded-xl backdrop-blur-md z-10">
+                                <h3 className="text-xl font-bold text-slate-300 uppercase">Main Pocket <span className="text-xs opacity-60 block md:inline">(Other)</span></h3>
+                                <button onClick={() => addItem('main')} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-full text-white shadow-lg"><Plus size={20}/></button>
+                            </div>
+                            <div className="space-y-2">
+                                {trainer.inventory?.filter(i => i.pocket === 'main').map(item => (
+                                    <div key={item.id} className="bg-slate-800 p-3 rounded-xl flex justify-between items-center border border-slate-700 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            {item.image && <img src={item.image} alt={item.name} className="w-8 h-8 object-contain" />}
+                                            <span className="font-bold text-white">{item.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-black/30 rounded-lg px-2 py-1">
+                                            <button onClick={() => updateItemCount(item.id, -1)} className="text-slate-400 hover:text-red-400"><Minus size={16}/></button>
+                                            <span className="font-mono text-white w-6 text-center font-bold">{item.count}</span>
+                                            <button onClick={() => updateItemCount(item.id, 1)} className="text-slate-400 hover:text-green-400"><Plus size={16}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!trainer.inventory?.some(i => i.pocket === 'main')) && <p className="text-slate-500 text-center italic py-8 opacity-50">Empty Pocket</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Item Selector Modal */}
+        {isItemSelectorOpen && (
+            <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsItemSelectorOpen(false)}>
+                <div className="bg-slate-900 border-4 border-slate-700 rounded-3xl w-full max-w-2xl h-[70vh] flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="bg-slate-800 p-4 flex justify-between items-center shrink-0 border-b border-slate-700">
+                        <h2 className="text-xl font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                            <Search size={24} /> Select Item ({selectorTargetPocket === 'small' ? 'Small Pocket' : 'Main Pocket'})
+                        </h2>
+                        <button onClick={() => setIsItemSelectorOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+                    
+                    <div className="p-4 bg-slate-800/50">
+                        <input 
+                            type="text" 
+                            autoFocus
+                            placeholder={language === 'it' ? "Cerca oggetto..." : "Search item..."}
+                            value={itemSearchTerm}
+                            onChange={(e) => setItemSearchTerm(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-2">
+                        {items.filter(i => {
+                            const matchesSearch = i.Name.toLowerCase().includes(itemSearchTerm.toLowerCase());
+                            const isSmallPocketItem = i.Pocket === 'HeldItems' || i.Pocket === 'Medicine';
+                            const matchesPocket = selectorTargetPocket === 'small' ? isSmallPocketItem : !isSmallPocketItem;
+                            return matchesSearch && matchesPocket;
+                        }).map(item => (
+                            <button 
+                                key={item._id} 
+                                onClick={() => handleSelectItem(item)}
+                                className="w-full bg-slate-800 hover:bg-slate-700 p-3 rounded-xl flex items-center gap-4 transition-colors border border-slate-700 hover:border-slate-500 text-left group"
+                            >
+                                <img src={getItemImageUrl(item)} alt={item.Name} className="w-10 h-10 object-contain" />
+                                <div className="flex-1">
+                                    <div className="font-bold text-white group-hover:text-blue-300 transition-colors">{item.Name}</div>
+                                    <div className="text-xs text-slate-400">{item.Pocket}</div>
+                                </div>
+                                <Plus size={20} className="text-slate-500 group-hover:text-green-400" />
+                            </button>
+                        ))}
+                        {items.length === 0 && <div className="text-center text-slate-500 py-8">No items loaded.</div>}
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

@@ -940,6 +940,15 @@ export const createInitialPokemon = (data: PokemonData): PokemonCharacter => {
     };
 };
 
+export interface InventoryItem {
+    id: string;
+    name: string;
+    count: number;
+    pocket: 'small' | 'main';
+    description?: string;
+    image?: string;
+}
+
 export interface TrainerData {
     name: string;
     age: number;
@@ -965,6 +974,7 @@ export interface TrainerData {
     };
     hp: { current: number; max: number };
     will: { current: number; max: number };
+    inventory: InventoryItem[];
 }
 
 export const createInitialTrainer = (): TrainerData => {
@@ -990,5 +1000,6 @@ export const createInitialTrainer = (): TrainerData => {
         },
         hp: { current: 4, max: 4 },
         will: { current: 4, max: 4 },
+        inventory: [],
     };
 };
